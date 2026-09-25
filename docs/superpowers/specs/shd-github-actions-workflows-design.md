@@ -1,11 +1,6 @@
 # shd-github-actions-workflows — Workflows reutilizáveis (Design)
 
-**Data:** 2026-09-25
-**Status:** Aguardando revisão
-**Fase:** 0 (fundação da esteira)
-**Relacionados:** [shd-terraform-aws-modules](../../../../shd-terraform-aws-modules/docs/superpowers/specs/2026-09-25-shd-terraform-aws-modules-design.md) ·
-[delta da fundação](../../../../aws-megamix-infra/docs/superpowers/specs/2026-09-25-megamix-infra-foundation-delta-design.md) ·
-[plataforma](../../../../aws-megamix-infra-platform/docs/superpowers/specs/2026-09-25-megamix-infra-platform-design.md)
+**Estado-alvo** deste repositório. Contexto: [PRD](../../../../docs/prd.md) · [Arquitetura](../../../../docs/arquitetura.md) (ADR-11, ADR-13, ADR-14, ADR-15) · [Fundação](../../../../aws-megamix-infra/docs/superpowers/specs/megamix-infra-foundation-design.md)
 
 ## 1. Objetivo
 
@@ -86,7 +81,7 @@ As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de La
 | `ci-infra-terraform.yml` | PR para `dev` (env dev) / `main` (env prod) | parse do `.pipeline.yml` → `fmt -check` → `init` com backend → `validate` → `tflint` → `checkov` (falha em severidade alta) → `plan` publicado como comentário no PR |
 | `cd-infra-terraform.yml` | push em `dev` / `main`; também chamado pelo rollback | parse → replace-tokens → `init` → `plan` salvo → `apply` do plan salvo; input `ref` opcional para reaplicar uma tag |
 | `ci-terraform-module.yml` | PR no `shd-terraform-aws-modules` | detecta módulos alterados → `fmt -check`, `validate` de módulos e `examples/*`, `tflint`, `checkov`, `terraform test` |
-| `release.yml` | push em `main` (consumidores com release) | semantic-release a partir de Conventional Commits |
+| `release.yml` | push em `main` — **todos** os repositórios (ADR-14) | semantic-release: `feat` → minor, `BREAKING CHANGE` → major, **qualquer outro tipo → patch** (`releaseRules`), para que todo commit na `main` gere tag `vX.Y.Z` e GitHub Release. Só cria tag e release; nunca commita na `main` |
 | `pr-validation.yml` | PR | branch de origem permitida — **somente** `feature/*` → `dev` e `dev` → `main` — e título em Conventional Commits |
 | `rollback-infra.yml` | issue com o template de rollback e label `rollback-approved` | lê a tag e o ambiente da issue → chama `cd-infra-terraform` com `ref` = tag → comenta o resultado na issue |
 | `destroy-infra.yml` | issue com o template de destroy e label `destroy-approved` | **somente dev**; exige confirmação textual com o nome do repositório; `plan -destroy` + `apply` |

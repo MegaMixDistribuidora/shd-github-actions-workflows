@@ -39,3 +39,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: ./actions/validate-pr
+
+  self-test:
+    name: Self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests/fixtures/infra-basic
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: config
+        uses: ./actions/parse-config
+        with:
+          environment: dev
+          config-file: tests/fixtures/infra-basic/.pipeline.yml
+
+      - uses: ./actions/setup-terraform-aws
+        with:
+          terraform-version: ${{ steps.config.outputs.terraform-version }}
+
+      - name: Versão instalada é a do .pipeline.yml
+        run: terraform version -json | jq -e --arg v "${{ steps.config.outputs.terraform-version }}" '.terraform_version == $v'

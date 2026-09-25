@@ -1,0 +1,30 @@
+name: Setup Terraform + AWS
+description: Instala o Terraform (sem wrapper) e, se houver role, assume-a via OIDC.
+
+inputs:
+  terraform-version:
+    description: Versão do Terraform (vem do .pipeline.yml)
+    required: true
+  aws-role-arn:
+    description: Role assumida via OIDC. Vazio = não configura credenciais (autoteste, módulos).
+    required: false
+    default: ''
+  aws-region:
+    description: Região AWS
+    required: false
+    default: sa-east-1
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    # O job chamador precisa de permissions: id-token: write.
+    - if: inputs.aws-role-arn != ''
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}

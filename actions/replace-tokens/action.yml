@@ -1,0 +1,20 @@
+name: Replace Tokens
+description: Substitui ${pipe_<chave>} nos arquivos do files-to-replace do .pipeline.yml.
+
+inputs:
+  files:
+    description: Arquivos separados por espaço (vazio = nada a fazer)
+    required: false
+    default: ''
+  config:
+    description: JSON do output config do parse-config
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        FILES: ${{ inputs.files }}
+        CONFIG: ${{ inputs.config }}
+      run: python3 "${{ github.action_path }}/replace-tokens.py"

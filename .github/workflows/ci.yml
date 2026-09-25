@@ -62,3 +62,38 @@ jobs:
 
       - name: Versão instalada é a do .pipeline.yml
         run: terraform version -json | jq -e --arg v "${{ steps.config.outputs.terraform-version }}" '.terraform_version == $v'
+
+      - uses: ./actions/replace-tokens
+        with:
+          files: ${{ steps.config.outputs.files-to-replace }}
+          config: ${{ steps.config.outputs.config }}
+
+      - id: plan
+        uses: ./actions/terraform-plan
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          environment: dev
+
+      - name: Primeiro plano tem mudanças
+        run: test "${{ steps.plan.outputs.has-changes }}" = "true"
+
+      - uses: ./actions/terraform-apply
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          plan-file: ${{ steps.plan.outputs.plan-file }}
+
+      - id: replan
+        uses: ./actions/terraform-plan
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          environment: dev
+          lint: 'false'
+
+      - name: Depois do apply não há mudanças
+        run: test "${{ steps.replan.outputs.has-changes }}" = "false"
+
+      - name: Apply de plano vazio não falha
+        uses: ./actions/terraform-apply
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          plan-file: ${{ steps.replan.outputs.plan-file }}

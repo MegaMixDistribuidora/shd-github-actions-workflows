@@ -1,0 +1,51 @@
+name: Terraform Plan
+description: fmt, init, validate, lint (tflint + checkov em relatório) e plan salvo em arquivo.
+
+inputs:
+  working-directory:
+    description: Diretório do Terraform (infra.working-path)
+    required: true
+  environment:
+    description: Ambiente — usa environments/<ambiente>.tfvars
+    required: true
+  backend-bucket:
+    description: Bucket de state. Vazio = init -backend=false (autoteste)
+    required: false
+    default: ''
+  backend-key:
+    description: Chave do state — <repositório>/terraform.tfstate, sem pasta de ambiente
+    required: false
+    default: ''
+  lint:
+    description: Roda tflint e checkov (true/false)
+    required: false
+    default: 'true'
+  destroy:
+    description: Plano de destruição (true/false)
+    required: false
+    default: 'false'
+
+outputs:
+  has-changes:
+    description: true se o plano tem mudanças
+    value: ${{ steps.plan.outputs.has-changes }}
+  plan-file:
+    description: Caminho absoluto do plano salvo
+    value: ${{ steps.plan.outputs.plan-file }}
+  plan-text:
+    description: Caminho absoluto do plano em texto
+    value: ${{ steps.plan.outputs.plan-text }}
+
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        BACKEND_BUCKET: ${{ inputs.backend-bucket }}
+        BACKEND_KEY: ${{ inputs.backend-key }}
+        LINT: ${{ inputs.lint }}
+        DESTROY: ${{ inputs.destroy }}
+      run: bash "${{ github.action_path }}/plan.sh"

@@ -1,0 +1,16 @@
+# Reutilizável. Chamador: on: pull_request (types: opened, edited, synchronize, reopened).
+name: PR Validation
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/validate-pr@main

@@ -1,0 +1,147 @@
+# shd-github-actions-workflows — Workflows reutilizáveis (Design)
+
+**Estado-alvo** deste repositório. Contexto: [PRD](../../../../docs/prd.md) · [Arquitetura](../../../../docs/arquitetura.md) (ADR-11, ADR-13, ADR-14, ADR-15) · [Fundação](../../../../aws-megamix-infra/docs/superpowers/specs/megamix-infra-foundation-design.md)
+
+## 1. Objetivo
+
+`MegaMixDistribuidora/shd-github-actions-workflows` concentra os workflows
+reutilizáveis e as actions compostas de todos os repositórios da Mega Mix. Os
+repositórios consumidores têm apenas workflows "chamadores" de poucas linhas; a
+lógica vive aqui. `SthoreH/shd-github-actions-workflows` é **referência de
+código**, não dependência.
+
+Sucesso: fundação, plataforma e o repositório de módulos rodam CI e CD
+exclusivamente com workflows desta organização, fixados por tag, e **fixar a tag
+congela o comportamento inteiro** — inclusive das actions internas.
+
+## 2. Decisões
+
+| Decisão | Motivo |
+|---|---|
+| Repositório **público** | Workflows reutilizáveis de repositório público podem ser chamados por repositórios privados sem configuração extra; não contém segredo |
+| `.pipeline.yml` na raiz do consumidor é a fonte da verdade de versões e caminhos | Mesmo contrato da referência, já usado pela fundação |
+| Fluxo de branches `feature/*` → `dev` → `main` | Regra do projeto (`.claude/CLAUDE.md` do workspace): nenhum commit direto em `dev`/`main`, toda mudança por PR. PR em `dev` valida contra dev, merge em `dev` aplica em dev; PR em `main` valida contra prod, merge em `main` aplica em prod e gera release |
+| Repositório público com rulesets | Repositórios públicos têm rulesets no plano Free: `dev` e `main` exigem PR, checks verdes, sem force push nem deleção, sem bypass |
+| Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são **variables** do GitHub Environment (`vars.*`) — não são segredos e já estão configurados assim na fundação e na plataforma |
+| Prod exige aprovação | Required reviewers no GitHub Environment `prod` de cada consumidor |
+| Actions de terceiros em versões que rodam em Node 24 | A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
+
+## 3. Versionamento que congela de verdade
+
+**Problema na referência:** o consumidor fixa `ci-infra-terraform.yml@v1.6.0`, mas o workflow
+chama `actions/parse-config@main`, `actions/validate-terraform@main` etc. Uma mudança em `main`
+altera o comportamento de todos os consumidores sem nova tag.
+
+**Regra:** toda referência a uma action deste repositório dentro de um workflow deste repositório
+aponta para uma **tag de versão**, nunca `main`.
+
+**Mecanismo (sem commit na `main`):** o fluxo de branches proíbe commit direto em `main`, inclusive
+de bot. Por isso o release não usa `@semantic-release/git`:
+
+1. o job de release calcula a próxima versão a partir da última tag `v*`: como a tag aponta para um
+   commit fora da `main`, o semantic-release não a enxergaria. O cálculo usa o pai do commit da tag
+   como base e aplica `!`/`BREAKING CHANGE` → major, `feat` → minor, qualquer outro commit → patch
+   (ADR-14)
+2. faz checkout do commit de `main` em **HEAD destacado**, reescreve
+   `MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@<qualquer-ref>` para
+   `@v<nova versão>` em `.github/workflows/*.yml` e cria um commit **fora de qualquer branch**
+   (`chore(release): vX.Y.Z`)
+3. cria a tag `vX.Y.Z` nesse commit e faz push **apenas da tag**
+4. cria o GitHub Release com as notas geradas
+
+A tag `vX.Y.Z` aponta para um commit cujas referências internas são `@vX.Y.Z`, e a `main`
+continua só com commits vindos de PR. Em `main`, as referências internas ficam como `@main`
+(é o que o autoteste da §6 cobre, por caminho local).
+
+**Teste das actions deste repositório:** o CI do próprio repositório (§6) usa as actions por
+caminho local (`uses: ./actions/<nome>`), então uma mudança em action é testada no PR que a
+altera, sem depender de release.
+
+## 4. `.pipeline.yml` (contrato do consumidor)
+
+Mesmo esquema da referência, sem as seções de Lambda nesta fase:
+
+```yaml
+infra:
+  terraform-version: "1.14.9"
+  working-path: terraform-aws
+
+environments:
+  dev: {}
+  prod: {}
+  # files-to-replace: []   # opcional, substituição de tokens no CD
+```
+
+As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de Lambda (§5.2).
+
+## 5. Catálogo
+
+### 5.1 Fase 0 (escopo desta spec)
+
+| Workflow reutilizável | Gatilho no consumidor | Faz |
+|---|---|---|
+| `ci-infra-terraform.yml` | PR para `dev` (env dev) / `main` (env prod) | parse do `.pipeline.yml` → `fmt -check` → `init` com backend → `validate` → `tflint` → `checkov` (falha em severidade alta) → `plan` publicado como comentário no PR |
+| `cd-infra-terraform.yml` | push em `dev` / `main`; também chamado pelo rollback | parse → replace-tokens → `init` → `plan` salvo → `apply` do plan salvo; input `ref` opcional para reaplicar uma tag |
+| `ci-terraform-module.yml` | PR no `shd-terraform-aws-modules` | detecta módulos alterados → `fmt -check`, `validate` de módulos e `examples/*`, `tflint`, `checkov`, `terraform test` |
+| `release.yml` | push em `main` — **todos** os repositórios (ADR-14) | semantic-release: `feat` → minor, `BREAKING CHANGE` → major, **qualquer outro tipo → patch** (`releaseRules`), para que todo commit na `main` gere tag `vX.Y.Z` e GitHub Release. Só cria tag e release; nunca commita na `main` |
+| `pr-validation.yml` | PR | branch de origem permitida — **somente** `feature/*` → `dev` e `dev` → `main` — e título em Conventional Commits |
+| `rollback-infra.yml` | issue com o template de rollback e label `rollback-approved` | lê a tag e o ambiente da issue → chama `cd-infra-terraform` com `ref` = tag → comenta o resultado na issue |
+| `destroy-infra.yml` | issue com o template de destroy e label `destroy-approved` | **somente dev**; exige confirmação textual com o nome do repositório; `plan -destroy` + `apply` |
+
+| Action composta | Usada por |
+|---|---|
+| `parse-config` | todos os workflows de infra |
+| `setup-terraform-aws` | assume a role por OIDC e instala a versão do Terraform do `.pipeline.yml` |
+| `terraform-plan` / `terraform-apply` | CI e CD de infra |
+| `replace-tokens` | CD |
+| `validate-pr` | pr-validation |
+
+**Chave de state:** `{nome-do-repositório}/terraform.tfstate` no bucket de `TF_STATE_BUCKET`,
+região `sa-east-1`. Mesma convenção já usada pela fundação, para que a migração não mude o
+endereço do state.
+
+**Concorrência:** CD usa `concurrency: <repo>-<env>` sem cancelamento — dois applies no mesmo
+ambiente nunca rodam juntos, e um apply em andamento nunca é interrompido.
+
+**Permissões:** workflows declaram `contents: read` no topo; só os jobs que assumem role declaram
+`id-token: write`; o job de plan que comenta no PR declara `pull-requests: write`.
+
+### 5.2 Fases seguintes (contrato planejado, fora do escopo desta spec)
+
+| Workflow | Fase | Observação |
+|---|---|---|
+| `ci-lambda-python.yml` / `cd-lambda-python.yml` | 1 (catalog service) | ruff, pytest com cobertura mínima do `.pipeline.yml`; **empacota uma vez** o zip do serviço (arm64) e aplica o Terraform que cria as N funções |
+| `ci-amplify-nodejs.yml` / `cd-amplify-terraform.yml` | 1 (loja) | lint, typecheck, build; infra do Amplify por Terraform |
+
+Especificados na spec do primeiro consumidor.
+
+## 6. CI deste repositório
+
+- PR: `actionlint` e `shellcheck` em todos os workflows e scripts; um workflow de autoteste
+  roda as actions por caminho local (`./actions/*`) contra um consumidor de exemplo em
+  `tests/fixtures/infra-basic/` (Terraform sem backend nem provider real, com `plan` usando
+  `-backend=false` e provider mockado)
+- Push em `main`: release com o passo de reescrita da §3
+
+## 7. Documentação
+
+- `README.md` com o catálogo, o fluxo de branches e um exemplo de workflow chamador por tipo de
+  repositório
+- `docs/conventions.md` com o contrato do `.pipeline.yml`, variables do GitHub Environment, trust
+  OIDC esperada e chave de state
+- `docs/workflows/<nome>.md` com inputs, secrets e passos de cada workflow
+
+## 8. Verificação
+
+1. CI verde neste repositório (actionlint, shellcheck, autoteste)
+2. `v1.0.0` publicada e o commit da tag sem nenhum `@main` interno: `git grep -n "shd-github-actions-workflows/actions/.*@main" v1.0.0` retorna vazio
+3. Em `shd-terraform-aws-modules`, um PR roda `ci-terraform-module@v1.0.0` com sucesso
+4. Na fundação, um PR para `dev` roda `ci-infra-terraform@v1.0.0` e publica o plan no PR
+
+## 9. Riscos aceitos
+
+| Risco | Mitigação |
+|---|---|
+| Tag aponta para commit fora de qualquer branch | Comportamento esperado: a tag mantém o commit vivo; o conteúdo difere da `main` apenas nas referências `@vX.Y.Z` |
+| `checkov` barrar a fundação por achados já existentes | Supressões explícitas e comentadas no código (`#checkov:skip=<id>:<motivo>`), nunca desligar o passo |
+| Destroy acidental | Somente dev, label + confirmação textual, e os recursos críticos têm `prevent_destroy` |

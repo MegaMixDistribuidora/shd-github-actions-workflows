@@ -2,8 +2,8 @@
 # A tag aponta para um commit FORA da main em que as referências internas
 # MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@... são
 # reescritas para @vX.Y.Z — fixar a tag congela também as actions internas.
-# Como esse commit não é alcançável pela main, a versão é calculada a partir
-# da última tag v* (e não pelo semantic-release, que só enxerga tags da branch).
+# Como esse commit não é alcançável pela main, a versão é calculada por
+# scripts/next-version.sh a partir da última tag v* (e não pelo semantic-release).
 name: Release
 
 on:
@@ -32,30 +32,7 @@ jobs:
 
       - name: Calculate next version
         id: version
-        run: |
-          set -euo pipefail
-          last_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1)
-          if [ -z "$last_tag" ]; then
-            echo "version=1.0.0" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # A tag aponta para o commit de release; o pai dele é o commit da main que foi liberado.
-          base=$(git rev-parse "${last_tag}^")
-          range="${base}..HEAD"
-          if [ -z "$(git rev-list "$range")" ]; then
-            echo "Nenhum commit novo desde ${last_tag}."
-            echo "version=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          IFS=. read -r major minor patch <<< "${last_tag#v}"
-          if git log --format=%B "$range" | grep -qE '^BREAKING CHANGE|^[a-z]+(\([^)]*\))?!:'; then
-            major=$((major + 1)); minor=0; patch=0
-          elif git log --format=%s "$range" | grep -qE '^feat(\([^)]*\))?:'; then
-            minor=$((minor + 1)); patch=0
-          else
-            patch=$((patch + 1))
-          fi
-          echo "version=${major}.${minor}.${patch}" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(bash scripts/next-version.sh)" >> "$GITHUB_OUTPUT"
 
       - name: Tag with pinned internal references
         if: steps.version.outputs.version != ''
@@ -66,7 +43,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --detach
-          sed -i -E "s#(MegaMixDistribuidora/shd-github-actions-workflows/actions/[A-Za-z0-9_-]+)@[^[:space:]\"']+#\1@v${VERSION}#g" .github/workflows/*.yml
+          bash scripts/pin-internal-refs.sh "$VERSION" .github/workflows/*.yml
           if ! git diff --quiet; then
             git commit -qam "chore(release): v${VERSION}"
           fi

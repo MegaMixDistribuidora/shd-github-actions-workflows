@@ -5,8 +5,8 @@
 2. **Nunca commitar nem fazer push direto em `dev` ou `main`.** Única exceção: o commit inicial de um repositório vazio (cria a `main`; a `dev` sai dela).
 3. **Toda mudança entra por PR:** `feature/*` → `dev` e `dev` → `main`. Nenhuma outra origem ou destino.
 4. Feature concluída: push e `gh pr create --base dev --title "<tipo>: <resumo>"`. Check vermelho se corrige na mesma feature.
-5. **Merge em `dev`:** o Claude só faz com **todos os checks verdes e autorização explícita do usuário** na conversa. Dispara o CD de dev.
-6. **Merge em `main` é sempre do usuário.** O Claude só abre o PR `dev` → `main` quando pedido. Dispara o CD de prod.
+5. **Merge em `dev`:** o Claude só faz com **todos os checks verdes e autorização explícita do usuário** na conversa. Dispara o CD de dev. **Se o Deploy Dev ficar verde, o Claude abre em seguida o PR `dev` → `main`** (com o resultado do deploy na descrição) e confere o CI de prod; se o deploy falhar, corrige numa `feature/*` antes de promover.
+6. **Merge em `main` é sempre do usuário.** Dispara o CD de prod e o release (regra 7).
 7. **Todo commit na `main` gera tag `vX.Y.Z` e GitHub Release** (ADR-14): `feat` → minor, `BREAKING CHANGE` → major, qualquer outro tipo → patch. O release nunca commita na `main`.
 8. **Nunca contornar a esteira:** sem `--no-verify`, force push, `gh pr merge --admin` ou checks desligados.
 9. Commits e títulos de PR em Conventional Commits, em português (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).

@@ -38,8 +38,10 @@ aponta para uma **tag de versão**, nunca `main`.
 **Mecanismo (sem commit na `main`):** o fluxo de branches proíbe commit direto em `main`, inclusive
 de bot. Por isso o release não usa `@semantic-release/git`:
 
-1. o job de release calcula a próxima versão a partir dos Conventional Commits (semantic-release
-   em `--dry-run`, só para obter o número)
+1. o job de release calcula a próxima versão a partir da última tag `v*`: como a tag aponta para um
+   commit fora da `main`, o semantic-release não a enxergaria. O cálculo usa o pai do commit da tag
+   como base e aplica `!`/`BREAKING CHANGE` → major, `feat` → minor, qualquer outro commit → patch
+   (ADR-14)
 2. faz checkout do commit de `main` em **HEAD destacado**, reescreve
    `MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@<qualquer-ref>` para
    `@v<nova versão>` em `.github/workflows/*.yml` e cria um commit **fora de qualquer branch**

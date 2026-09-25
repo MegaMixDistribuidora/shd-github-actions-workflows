@@ -1,0 +1,25 @@
+name: Changed Modules
+description: Lista, em JSON, os módulos Terraform afetados entre dois refs.
+
+inputs:
+  base:
+    description: Ref base
+    required: true
+  head:
+    description: Ref head
+    required: true
+
+outputs:
+  modules:
+    description: JSON array com os nomes dos módulos
+    value: ${{ steps.list.outputs.modules }}
+
+runs:
+  using: composite
+  steps:
+    - id: list
+      shell: bash
+      run: |
+        mods=$(bash "${{ github.action_path }}/changed-modules.sh" "${{ inputs.base }}" "${{ inputs.head }}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+        echo "modules=$mods" >> "$GITHUB_OUTPUT"
+        echo "Módulos afetados: $mods"

@@ -1,0 +1,62 @@
+# Reutilizável. Chamador: on: push em main — todos os repositórios (ADR-14).
+name: Semantic Release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Tag and Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      # Regras únicas para todos os consumidores: qualquer tipo de commit gera versão.
+      - name: Configuração canônica do semantic-release
+        run: |
+          cat > .releaserc.json <<'EOF'
+          {
+            "branches": ["main"],
+            "tagFormat": "v${version}",
+            "plugins": [
+              ["@semantic-release/commit-analyzer", {
+                "preset": "angular",
+                "releaseRules": [
+                  {"breaking": true, "release": "major"},
+                  {"type": "feat", "release": "minor"},
+                  {"type": "fix", "release": "patch"},
+                  {"type": "perf", "release": "patch"},
+                  {"type": "refactor", "release": "patch"},
+                  {"type": "docs", "release": "patch"},
+                  {"type": "chore", "release": "patch"},
+                  {"type": "test", "release": "patch"},
+                  {"type": "ci", "release": "patch"},
+                  {"type": "build", "release": "patch"},
+                  {"type": "style", "release": "patch"},
+                  {"type": "revert", "release": "patch"}
+                ]
+              }],
+              "@semantic-release/release-notes-generator",
+              "@semantic-release/github"
+            ]
+          }
+          EOF
+
+      - name: semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx --yes semantic-release@24

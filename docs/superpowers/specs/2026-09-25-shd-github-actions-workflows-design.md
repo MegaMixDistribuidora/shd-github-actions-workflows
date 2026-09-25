@@ -25,7 +25,8 @@ congela o comportamento inteiro** — inclusive das actions internas.
 |---|---|
 | Repositório **público** | Workflows reutilizáveis de repositório público podem ser chamados por repositórios privados sem configuração extra; não contém segredo |
 | `.pipeline.yml` na raiz do consumidor é a fonte da verdade de versões e caminhos | Mesmo contrato da referência, já usado pela fundação |
-| Fluxo de branches `dev` → `main` | Mesmo fluxo já usado pela fundação: PR em `dev` valida contra dev, push em `dev` aplica em dev; PR em `main` valida contra prod, push em `main` aplica em prod e gera release |
+| Fluxo de branches `feature/*` → `dev` → `main` | Regra do projeto (`.claude/CLAUDE.md` do workspace): nenhum commit direto em `dev`/`main`, toda mudança por PR. PR em `dev` valida contra dev, merge em `dev` aplica em dev; PR em `main` valida contra prod, merge em `main` aplica em prod e gera release |
+| Repositório público com rulesets | Repositórios públicos têm rulesets no plano Free: `dev` e `main` exigem PR, checks verdes, sem force push nem deleção, sem bypass |
 | Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são secrets do GitHub Environment |
 | Prod exige aprovação | Required reviewers no GitHub Environment `prod` de cada consumidor |
 | Actions de terceiros em versões que rodam em Node 24 | A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
@@ -39,12 +40,21 @@ altera o comportamento de todos os consumidores sem nova tag.
 **Regra:** toda referência a uma action deste repositório dentro de um workflow deste repositório
 aponta para uma **tag de versão**, nunca `main`.
 
-**Mecanismo:** no release, antes de criar a tag, o semantic-release executa um passo
-(`@semantic-release/exec`, `prepareCmd`) que reescreve
-`MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@<qualquer-ref>` para
-`@v<nova versão>` em `.github/workflows/*.yml`, e `@semantic-release/git` comita a mudança
-(`chore(release): vX.Y.Z [skip ci]`) antes da tag. A tag `vX.Y.Z` aponta, portanto, para um
-commit cujas referências internas são `@vX.Y.Z`.
+**Mecanismo (sem commit na `main`):** o fluxo de branches proíbe commit direto em `main`, inclusive
+de bot. Por isso o release não usa `@semantic-release/git`:
+
+1. o job de release calcula a próxima versão a partir dos Conventional Commits (semantic-release
+   em `--dry-run`, só para obter o número)
+2. faz checkout do commit de `main` em **HEAD destacado**, reescreve
+   `MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@<qualquer-ref>` para
+   `@v<nova versão>` em `.github/workflows/*.yml` e cria um commit **fora de qualquer branch**
+   (`chore(release): vX.Y.Z`)
+3. cria a tag `vX.Y.Z` nesse commit e faz push **apenas da tag**
+4. cria o GitHub Release com as notas geradas
+
+A tag `vX.Y.Z` aponta para um commit cujas referências internas são `@vX.Y.Z`, e a `main`
+continua só com commits vindos de PR. Em `main`, as referências internas ficam como `@main`
+(é o que o autoteste da §6 cobre, por caminho local).
 
 **Teste das actions deste repositório:** o CI do próprio repositório (§6) usa as actions por
 caminho local (`uses: ./actions/<nome>`), então uma mudança em action é testada no PR que a
@@ -77,7 +87,7 @@ As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de La
 | `cd-infra-terraform.yml` | push em `dev` / `main`; também chamado pelo rollback | parse → replace-tokens → `init` → `plan` salvo → `apply` do plan salvo; input `ref` opcional para reaplicar uma tag |
 | `ci-terraform-module.yml` | PR no `shd-terraform-aws-modules` | detecta módulos alterados → `fmt -check`, `validate` de módulos e `examples/*`, `tflint`, `checkov`, `terraform test` |
 | `release.yml` | push em `main` (consumidores com release) | semantic-release a partir de Conventional Commits |
-| `pr-validation.yml` | PR | branch de origem permitida (`feature/*`, `fix/*`, `docs/*`, `chore/*` → `dev`; `dev` ou `hotfix/*` → `main`) e título em Conventional Commits |
+| `pr-validation.yml` | PR | branch de origem permitida — **somente** `feature/*` → `dev` e `dev` → `main` — e título em Conventional Commits |
 | `rollback-infra.yml` | issue com o template de rollback e label `rollback-approved` | lê a tag e o ambiente da issue → chama `cd-infra-terraform` com `ref` = tag → comenta o resultado na issue |
 | `destroy-infra.yml` | issue com o template de destroy e label `destroy-approved` | **somente dev**; exige confirmação textual com o nome do repositório; `plan -destroy` + `apply` |
 
@@ -135,6 +145,6 @@ Especificados na spec do primeiro consumidor.
 
 | Risco | Mitigação |
 |---|---|
-| O commit de release escrito pelo bot altera `main` | `[skip ci]` e ruleset permitindo apenas o bot de release no bypass |
+| Tag aponta para commit fora de qualquer branch | Comportamento esperado: a tag mantém o commit vivo; o conteúdo difere da `main` apenas nas referências `@vX.Y.Z` |
 | `checkov` barrar a fundação por achados já existentes | Supressões explícitas e comentadas no código (`#checkov:skip=<id>:<motivo>`), nunca desligar o passo |
 | Destroy acidental | Somente dev, label + confirmação textual, e os recursos críticos têm `prevent_destroy` |

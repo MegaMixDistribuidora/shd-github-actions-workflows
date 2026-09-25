@@ -6,9 +6,13 @@ inputs:
     description: Versão do Terraform (vem do .pipeline.yml)
     required: true
   aws-role-arn:
-    description: Role assumida via OIDC. Vazio = não configura credenciais (autoteste, módulos).
+    description: Role assumida via OIDC (vars.AWS_ROLE_ARN)
     required: false
     default: ''
+  require-role:
+    description: Falha se aws-role-arn vier vazio (true/false). Autoteste e CI de módulos usam false
+    required: false
+    default: 'true'
   aws-region:
     description: Região AWS
     required: false
@@ -17,6 +21,17 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Role definida no Environment
+      shell: bash
+      env:
+        ROLE: ${{ inputs.aws-role-arn }}
+        REQUIRE_ROLE: ${{ inputs.require-role }}
+      run: |
+        if [[ "$REQUIRE_ROLE" == "true" && -z "$ROLE" ]]; then
+          echo "::error::role vazia: defina a variable AWS_ROLE_ARN (vars.AWS_ROLE_ARN) no GitHub Environment do job."
+          exit 1
+        fi
+
     - uses: hashicorp/setup-terraform@v4
       with:
         terraform_version: ${{ inputs.terraform-version }}

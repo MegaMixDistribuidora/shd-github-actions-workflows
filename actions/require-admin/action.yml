@@ -1,0 +1,18 @@
+name: Require Admin for Prod
+description: Em prod, recusa a operação se quem a disparou não for admin do repositório.
+
+inputs:
+  environment:
+    description: Ambiente alvo (dev libera sem checar)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        SENDER: ${{ github.event.sender.login }}
+        REPOSITORY: ${{ github.repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: bash "${{ github.action_path }}/require-admin.sh"

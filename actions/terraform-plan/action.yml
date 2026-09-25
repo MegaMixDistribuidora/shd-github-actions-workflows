@@ -9,13 +9,17 @@ inputs:
     description: Ambiente — usa environments/<ambiente>.tfvars
     required: true
   backend-bucket:
-    description: Bucket de state. Vazio = init -backend=false (autoteste)
+    description: Bucket de state (vars.TF_STATE_BUCKET). Vazio só é aceito com require-backend false
     required: false
     default: ''
   backend-key:
     description: Chave do state — <repositório>/terraform.tfstate, sem pasta de ambiente
     required: false
     default: ''
+  require-backend:
+    description: Falha se backend-bucket vier vazio (true/false). Só o autoteste usa false
+    required: false
+    default: 'true'
   lint:
     description: Roda tflint e checkov (true/false)
     required: false
@@ -48,4 +52,5 @@ runs:
         BACKEND_KEY: ${{ inputs.backend-key }}
         LINT: ${{ inputs.lint }}
         DESTROY: ${{ inputs.destroy }}
+        REQUIRE_BACKEND: ${{ inputs.require-backend }}
       run: bash "${{ github.action_path }}/plan.sh"

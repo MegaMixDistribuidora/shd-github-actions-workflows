@@ -19,7 +19,7 @@ Detalhes em [`docs/workflows/`](docs/workflows) e o contrato do consumidor em [`
 ## Chamadores de um repositório de infra
 
 ```yaml
-# .github/workflows/ci-dev.yml
+# .github/workflows/ci-dev.yml (ci-prod.yml: branches [main], environment: prod, mesmo needs: pr)
 name: CI Dev
 on:
   pull_request:
@@ -31,6 +31,8 @@ jobs:
   pr:
     uses: MegaMixDistribuidora/shd-github-actions-workflows/.github/workflows/pr-validation.yml@vX.Y.Z
   ci:
+    # needs: pr — o plan assume a role do ambiente; PR fora do fluxo não chega a ter credencial.
+    needs: pr
     uses: MegaMixDistribuidora/shd-github-actions-workflows/.github/workflows/ci-infra-terraform.yml@vX.Y.Z
     with:
       environment: dev

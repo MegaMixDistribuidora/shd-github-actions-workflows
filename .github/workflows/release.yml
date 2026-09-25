@@ -32,7 +32,10 @@ jobs:
 
       - name: Calculate next version
         id: version
-        run: echo "version=$(bash scripts/next-version.sh)" >> "$GITHUB_OUTPUT"
+        # Atribuição separada: "echo $(...)" esconderia a falha e o release sumiria em silêncio.
+        run: |
+          version=$(bash scripts/next-version.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Tag with pinned internal references
         if: steps.version.outputs.version != ''

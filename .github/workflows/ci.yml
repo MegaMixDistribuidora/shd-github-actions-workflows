@@ -59,6 +59,7 @@ jobs:
       - uses: ./actions/setup-terraform-aws
         with:
           terraform-version: ${{ steps.config.outputs.terraform-version }}
+          require-role: 'false'
 
       - name: Versão instalada é a do .pipeline.yml
         run: terraform version -json | jq -e --arg v "${{ steps.config.outputs.terraform-version }}" '.terraform_version == $v'
@@ -73,6 +74,7 @@ jobs:
         with:
           working-directory: tests/fixtures/infra-basic/terraform-aws
           environment: dev
+          require-backend: 'false'
 
       - name: Primeiro plano tem mudanças
         run: test "${{ steps.plan.outputs.has-changes }}" = "true"
@@ -87,6 +89,7 @@ jobs:
         with:
           working-directory: tests/fixtures/infra-basic/terraform-aws
           environment: dev
+          require-backend: 'false'
           lint: 'false'
 
       - name: Depois do apply não há mudanças

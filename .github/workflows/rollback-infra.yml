@@ -35,6 +35,10 @@ jobs:
           [[ "$ENVIRONMENT" =~ ^(dev|prod)$ ]] || { echo "::error::ambiente inválido: $ENVIRONMENT"; exit 1; }
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag inválida: $TAG"; exit 1; }
           gh api "repos/$REPOSITORY/git/ref/tags/$TAG" >/dev/null || { echo "::error::tag $TAG não existe"; exit 1; }
+      # Sem required reviewers no plano Free: rollback em prod só por admin do repositório.
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/require-admin@main
+        with:
+          environment: ${{ steps.env.outputs.value }}
 
   rollback:
     name: Rollback

@@ -23,7 +23,7 @@ congela o comportamento inteiro** — inclusive das actions internas.
 | Fluxo de branches `feature/*` → `dev` → `main` | Regra do projeto (`.claude/CLAUDE.md` do workspace): nenhum commit direto em `dev`/`main`, toda mudança por PR. PR em `dev` valida contra dev, merge em `dev` aplica em dev; PR em `main` valida contra prod, merge em `main` aplica em prod e gera release |
 | Repositório público com rulesets | Repositórios públicos têm rulesets no plano Free: `dev` e `main` exigem PR, checks verdes, sem force push nem deleção, sem bypass |
 | Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são **variables** do GitHub Environment (`vars.*`) — não são segredos e já estão configurados assim na fundação e na plataforma |
-| Proteção de prod | No plano Free, repositórios privados não têm required reviewers; a proteção de prod é o merge em `main` feito pelo usuário (regra 6 de `git.md`) e o hook `guard-git` |
+| Proteção de prod | No plano Free, repositórios privados não têm required reviewers; a proteção de prod é o merge em `main` feito pelo usuário (regra 6 de `git.md`), o hook `guard-git` e, no rollback, a exigência de admin para prod (action `require-admin`) |
 | Actions de terceiros em versões que rodam em Node 24 | `checkout@v7`, `configure-aws-credentials@v6`, `setup-terraform@v4`, `github-script@v9`, `setup-node@v7`. A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
 
 ## 3. Versionamento que congela de verdade
@@ -97,6 +97,7 @@ As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de La
 | `validate-pr` | pr-validation |
 | `changed-modules` | ci-terraform-module |
 | `parse-issue` | rollback e destroy |
+| `require-admin` | rollback (prod só por admin) |
 
 **Chave de state:** `{nome-do-repositório}/terraform.tfstate` no bucket de `TF_STATE_BUCKET`,
 região `sa-east-1`. Mesma convenção já usada pela fundação, para que a migração não mude o
@@ -136,9 +137,9 @@ Especificados na spec do primeiro consumidor.
 ## 8. Verificação
 
 1. CI verde neste repositório (actionlint, shellcheck, autoteste)
-2. `v1.0.0` publicada e o commit da tag sem nenhum `@main` interno: `git grep -n "shd-github-actions-workflows/actions/.*@main" v1.0.0` retorna vazio
-3. Em `shd-terraform-aws-modules`, um PR roda `ci-terraform-module@v1.0.0` com sucesso
-4. Na fundação, um PR para `dev` roda `ci-infra-terraform@v1.0.0` e publica o plan no PR
+2. primeira tag com os workflows (`v1.1.0`, gerada pelo merge desta implementação) publicada e o commit da tag sem nenhum `@main` interno: `git grep -nE "shd-github-actions-workflows/(actions|\.github/workflows)/.*@main" v1.1.0` retorna vazio
+3. Em `shd-terraform-aws-modules`, um PR roda `ci-terraform-module@v1.1.0` com sucesso
+4. Na fundação, um PR para `dev` roda `ci-infra-terraform@v1.1.0` e publica o plan no PR
 
 ## 9. Riscos aceitos
 

@@ -32,6 +32,7 @@ jobs:
       - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
         with:
           terraform-version: ${{ inputs.terraform-version }}
+          require-role: 'false'
 
       - name: fmt, validate, tflint, checkov e terraform test
         env:

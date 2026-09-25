@@ -23,8 +23,8 @@ congela o comportamento inteiro** — inclusive das actions internas.
 | Fluxo de branches `feature/*` → `dev` → `main` | Regra do projeto (`.claude/CLAUDE.md` do workspace): nenhum commit direto em `dev`/`main`, toda mudança por PR. PR em `dev` valida contra dev, merge em `dev` aplica em dev; PR em `main` valida contra prod, merge em `main` aplica em prod e gera release |
 | Repositório público com rulesets | Repositórios públicos têm rulesets no plano Free: `dev` e `main` exigem PR, checks verdes, sem force push nem deleção, sem bypass |
 | Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são **variables** do GitHub Environment (`vars.*`) — não são segredos e já estão configurados assim na fundação e na plataforma |
-| Prod exige aprovação | Required reviewers no GitHub Environment `prod` de cada consumidor |
-| Actions de terceiros em versões que rodam em Node 24 | A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
+| Proteção de prod | No plano Free, repositórios privados não têm required reviewers; a proteção de prod é o merge em `main` feito pelo usuário (regra 6 de `git.md`) e o hook `guard-git` |
+| Actions de terceiros em versões que rodam em Node 24 | `checkout@v7`, `configure-aws-credentials@v6`, `setup-terraform@v4`, `github-script@v9`, `setup-node@v7`. A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
 
 ## 3. Versionamento que congela de verdade
 
@@ -80,10 +80,10 @@ As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de La
 
 | Workflow reutilizável | Gatilho no consumidor | Faz |
 |---|---|---|
-| `ci-infra-terraform.yml` | PR para `dev` (env dev) / `main` (env prod) | parse do `.pipeline.yml` → `fmt -check` → `init` com backend → `validate` → `tflint` → `checkov` (falha em severidade alta) → `plan` publicado como comentário no PR |
+| `ci-infra-terraform.yml` | PR para `dev` (env dev) / `main` (env prod) | parse do `.pipeline.yml` → `fmt -check` → `init` com backend → `validate` → `tflint` → `checkov` em relatório (`--soft-fail`; sem chave de API não há severidade) → `plan` publicado como comentário no PR |
 | `cd-infra-terraform.yml` | push em `dev` / `main`; também chamado pelo rollback | parse → replace-tokens → `init` → `plan` salvo → `apply` do plan salvo; input `ref` opcional para reaplicar uma tag |
 | `ci-terraform-module.yml` | PR no `shd-terraform-aws-modules` | detecta módulos alterados → `fmt -check`, `validate` de módulos e `examples/*`, `tflint`, `checkov`, `terraform test` |
-| `release.yml` | push em `main` — **todos** os repositórios (ADR-14) | semantic-release: `feat` → minor, `BREAKING CHANGE` → major, **qualquer outro tipo → patch** (`releaseRules`), para que todo commit na `main` gere tag `vX.Y.Z` e GitHub Release. Só cria tag e release; nunca commita na `main` |
+| `release-semantic.yml` | push em `main` — **todos** os repositórios (ADR-14) | grava a configuração canônica (o consumidor não mantém `.releaserc.json`); semantic-release: `feat` → minor, `BREAKING CHANGE` → major, **qualquer outro tipo → patch** (`releaseRules`), para que todo commit na `main` gere tag `vX.Y.Z` e GitHub Release. Só cria tag e release; nunca commita na `main` |
 | `pr-validation.yml` | PR | branch de origem permitida — **somente** `feature/*` → `dev` e `dev` → `main` — e título em Conventional Commits |
 | `rollback-infra.yml` | issue com o template de rollback e label `rollback-approved` | lê a tag e o ambiente da issue → chama `cd-infra-terraform` com `ref` = tag → comenta o resultado na issue |
 | `destroy-infra.yml` | issue com o template de destroy e label `destroy-approved` | **somente dev**; exige confirmação textual com o nome do repositório; `plan -destroy` + `apply` |
@@ -95,6 +95,8 @@ As seções `runtime`, `deploy` e `tests` (Lambda) entram com os workflows de La
 | `terraform-plan` / `terraform-apply` | CI e CD de infra |
 | `replace-tokens` | CD |
 | `validate-pr` | pr-validation |
+| `changed-modules` | ci-terraform-module |
+| `parse-issue` | rollback e destroy |
 
 **Chave de state:** `{nome-do-repositório}/terraform.tfstate` no bucket de `TF_STATE_BUCKET`,
 região `sa-east-1`. Mesma convenção já usada pela fundação, para que a migração não mude o

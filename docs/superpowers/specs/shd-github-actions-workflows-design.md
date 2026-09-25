@@ -22,7 +22,7 @@ congela o comportamento inteiro** — inclusive das actions internas.
 | `.pipeline.yml` na raiz do consumidor é a fonte da verdade de versões e caminhos | Mesmo contrato da referência, já usado pela fundação |
 | Fluxo de branches `feature/*` → `dev` → `main` | Regra do projeto (`.claude/CLAUDE.md` do workspace): nenhum commit direto em `dev`/`main`, toda mudança por PR. PR em `dev` valida contra dev, merge em `dev` aplica em dev; PR em `main` valida contra prod, merge em `main` aplica em prod e gera release |
 | Repositório público com rulesets | Repositórios públicos têm rulesets no plano Free: `dev` e `main` exigem PR, checks verdes, sem force push nem deleção, sem bypass |
-| Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são secrets do GitHub Environment |
+| Autenticação na AWS só por OIDC | Nenhuma chave estática; `AWS_ROLE_ARN` e `TF_STATE_BUCKET` são **variables** do GitHub Environment (`vars.*`) — não são segredos e já estão configurados assim na fundação e na plataforma |
 | Prod exige aprovação | Required reviewers no GitHub Environment `prod` de cada consumidor |
 | Actions de terceiros em versões que rodam em Node 24 | A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
 
@@ -127,7 +127,7 @@ Especificados na spec do primeiro consumidor.
 
 - `README.md` com o catálogo, o fluxo de branches e um exemplo de workflow chamador por tipo de
   repositório
-- `docs/conventions.md` com o contrato do `.pipeline.yml`, secrets do GitHub Environment, trust
+- `docs/conventions.md` com o contrato do `.pipeline.yml`, variables do GitHub Environment, trust
   OIDC esperada e chave de state
 - `docs/workflows/<nome>.md` com inputs, secrets e passos de cada workflow
 

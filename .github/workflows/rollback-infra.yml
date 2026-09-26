@@ -18,11 +18,11 @@ jobs:
       tag: ${{ steps.tag.outputs.value }}
     steps:
       - id: env
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@v1
         with:
           field: Ambiente
       - id: tag
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@v1
         with:
           field: Tag ou Release alvo
       - name: Ambiente e tag válidos
@@ -36,14 +36,14 @@ jobs:
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag inválida: $TAG"; exit 1; }
           gh api "repos/$REPOSITORY/git/ref/tags/$TAG" >/dev/null || { echo "::error::tag $TAG não existe"; exit 1; }
       # Sem required reviewers no plano Free: rollback em prod só por admin do repositório.
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/require-admin@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/require-admin@v1
         with:
           environment: ${{ steps.env.outputs.value }}
 
   rollback:
     name: Rollback
     needs: parse
-    uses: MegaMixDistribuidora/shd-github-actions-workflows/.github/workflows/cd-infra-terraform.yml@main
+    uses: MegaMixDistribuidora/shd-github-actions-workflows/.github/workflows/cd-infra-terraform.yml@v1
     with:
       environment: ${{ needs.parse.outputs.environment }}
       ref: ${{ needs.parse.outputs.tag }}

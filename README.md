@@ -1,6 +1,8 @@
 # shd-github-actions-workflows
 
-Workflows reutilizáveis e actions compostas da Mega Mix. Consumidores **sempre** fixam uma tag (`@vX.Y.Z`); a tag congela também as actions internas (o release reescreve as referências internas para a própria tag).
+Workflows reutilizáveis e actions compostas da Mega Mix. Consumidores **sempre** fixam uma tag exata (`@vX.Y.Z`), que congela o YAML do workflow. As actions internas são referenciadas pela **major móvel** (`@v1`), atualizada a cada release: correções nas actions chegam a quem está na mesma major sem trocar de tag.
+
+Mudança incompatível numa action = nova major: o mesmo PR troca as referências internas para `@v2` (o teste `tests/internal-refs_test.sh` garante que todas usem a mesma major).
 
 ## Catálogo
 

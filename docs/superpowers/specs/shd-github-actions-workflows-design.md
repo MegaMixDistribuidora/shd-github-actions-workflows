@@ -11,8 +11,8 @@ lógica vive aqui. `SthoreH/shd-github-actions-workflows` é **referência de
 código**, não dependência.
 
 Sucesso: fundação, plataforma e o repositório de módulos rodam CI e CD
-exclusivamente com workflows desta organização, fixados por tag, e **fixar a tag
-congela o comportamento inteiro** — inclusive das actions internas.
+exclusivamente com workflows desta organização, fixados por tag exata, e as
+actions internas seguem a major móvel da mesma versão (§3).
 
 ## 2. Decisões
 
@@ -26,36 +26,22 @@ congela o comportamento inteiro** — inclusive das actions internas.
 | Proteção de prod | No plano Free, repositórios privados não têm required reviewers; a proteção de prod é o merge em `main` feito pelo usuário (regra 6 de `git.md`), o hook `guard-git` e, no rollback, a exigência de admin para prod (action `require-admin`) |
 | Actions de terceiros em versões que rodam em Node 24 | `checkout@v7`, `configure-aws-credentials@v6`, `setup-terraform@v4`, `github-script@v9`, `setup-node@v7`. A referência usa actions em Node 20, que o GitHub já está forçando para Node 24 |
 
-## 3. Versionamento que congela de verdade
+## 3. Versionamento
 
-**Problema na referência:** o consumidor fixa `ci-infra-terraform.yml@v1.6.0`, mas o workflow
-chama `actions/parse-config@main`, `actions/validate-terraform@main` etc. Uma mudança em `main`
-altera o comportamento de todos os consumidores sem nova tag.
+**Consumidores** fixam a tag exata (`@vX.Y.Z`) do workflow reutilizável. **Referências internas** (workflow → action deste repositório, workflow → workflow) usam a **major móvel** (`@v1`).
 
-**Regra:** toda referência a uma action deste repositório dentro de um workflow deste repositório
-aponta para uma **tag de versão**, nunca `main`.
+**Por que não congelar as internas por tag exata:** congelar exigiria reescrever `.github/workflows/*.yml` a cada release (`@main` → `@vX.Y.Z`) e publicar esse commit. O GitHub recusa que o `GITHUB_TOKEN` faça push de commit que crie ou altere arquivos de workflow (`refusing to allow a GitHub App to create or update workflow … without workflows permission`), e a alternativa — GitHub App ou token pessoal com permissão de workflows — foi descartada em 2026-09-26 para não manter credencial extra. `uses:` não aceita expressões, então a ref não pode ser escolhida em tempo de execução.
 
-**Mecanismo (sem commit na `main`):** o fluxo de branches proíbe commit direto em `main`, inclusive
-de bot. Por isso o release não usa `@semantic-release/git`:
+**Consequência aceita:** quem fixa `@v1.1.0` recebe as actions internas da `v1` mais recente. Mudança incompatível em action exige nova major, e o mesmo PR troca todas as referências internas para `@v2`. `tests/internal-refs_test.sh` falha se houver referência interna `@main` ou em majors diferentes.
 
-1. o job de release calcula a próxima versão a partir da última tag `v*`: como a tag aponta para um
-   commit fora da `main`, o semantic-release não a enxergaria. O cálculo usa o pai do commit da tag
-   como base e aplica `!`/`BREAKING CHANGE` → major, `feat` → minor, qualquer outro commit → patch
-   (ADR-14)
-2. faz checkout do commit de `main` em **HEAD destacado**, reescreve
-   `MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@<qualquer-ref>` para
-   `@v<nova versão>` em `.github/workflows/*.yml` e cria um commit **fora de qualquer branch**
-   (`chore(release): vX.Y.Z`)
-3. cria a tag `vX.Y.Z` nesse commit e faz push **apenas da tag**
-4. cria o GitHub Release com as notas geradas
+**Mecanismo do release (sem commit na `main`, sem alterar arquivos):**
 
-A tag `vX.Y.Z` aponta para um commit cujas referências internas são `@vX.Y.Z`, e a `main`
-continua só com commits vindos de PR. Em `main`, as referências internas ficam como `@main`
-(é o que o autoteste da §6 cobre, por caminho local).
+1. `scripts/next-version.sh` calcula a próxima versão a partir da última tag `v*` (ADR-14): `!`/`BREAKING CHANGE` → major, `feat` → minor, qualquer outro commit → patch
+2. `scripts/tag-release.sh` cria `vX.Y.Z` no commit da `main` e move a major `vX` para ele
+3. push de `vX.Y.Z` e push forçado de `vX` (tags apontando para commit existente — permitido ao `GITHUB_TOKEN`)
+4. GitHub Release com as notas geradas
 
-**Teste das actions deste repositório:** o CI do próprio repositório (§6) usa as actions por
-caminho local (`uses: ./actions/<nome>`), então uma mudança em action é testada no PR que a
-altera, sem depender de release.
+**Teste das actions deste repositório:** o CI do próprio repositório usa as actions por caminho local (`uses: ./actions/<nome>`), então uma mudança em action é testada no PR que a altera, sem depender de release.
 
 ## 4. `.pipeline.yml` (contrato do consumidor)
 
@@ -124,7 +110,7 @@ Especificados na spec do primeiro consumidor.
   roda as actions por caminho local (`./actions/*`) contra um consumidor de exemplo em
   `tests/fixtures/infra-basic/` (Terraform sem backend nem provider real, com `plan` usando
   `-backend=false` e provider mockado)
-- Push em `main`: release com o passo de reescrita da §3
+- Push em `main`: release da §3 (tag exata + major móvel, sem alterar arquivos)
 
 ## 7. Documentação
 
@@ -137,7 +123,7 @@ Especificados na spec do primeiro consumidor.
 ## 8. Verificação
 
 1. CI verde neste repositório (actionlint, shellcheck, autoteste)
-2. primeira tag com os workflows (`v1.1.0`, gerada pelo merge desta implementação) publicada e o commit da tag sem nenhum `@main` interno: `git grep -nE "shd-github-actions-workflows/(actions|\.github/workflows)/.*@main" v1.1.0` retorna vazio
+2. primeira tag com os workflows (`v1.1.0`) e a major `v1` publicadas no mesmo commit da `main`; nenhuma referência interna `@main`: `git grep -nE "shd-github-actions-workflows/(actions|\\.github/workflows)/[^@]*@main" v1.1.0` retorna vazio
 3. Em `shd-terraform-aws-modules`, um PR roda `ci-terraform-module@v1.1.0` com sucesso
 4. Na fundação, um PR para `dev` roda `ci-infra-terraform@v1.1.0` e publica o plan no PR
 
@@ -145,6 +131,6 @@ Especificados na spec do primeiro consumidor.
 
 | Risco | Mitigação |
 |---|---|
-| Tag aponta para commit fora de qualquer branch | Comportamento esperado: a tag mantém o commit vivo; o conteúdo difere da `main` apenas nas referências `@vX.Y.Z` |
+| Actions internas seguem a major móvel, não a tag exata | Mudança incompatível só em nova major; `tests/internal-refs_test.sh` impede referências misturadas |
 | `checkov` barrar a fundação por achados já existentes | Supressões explícitas e comentadas no código (`#checkov:skip=<id>:<motivo>`), nunca desligar o passo |
 | Destroy acidental | Somente dev, label + confirmação textual, e os recursos críticos têm `prevent_destroy` |

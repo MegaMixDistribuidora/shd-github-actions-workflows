@@ -23,11 +23,11 @@ jobs:
       issues: write
     steps:
       - id: env
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@v1
         with:
           field: Ambiente
       - id: confirm
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@v1
         with:
           field: Confirmação
       - name: Só dev, confirmação com o nome do repositório
@@ -42,17 +42,17 @@ jobs:
       - uses: actions/checkout@v7
 
       - id: config
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@v1
         with:
           environment: dev
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@v1
         with:
           terraform-version: ${{ steps.config.outputs.terraform-version }}
           aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
 
       - id: plan
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@v1
         with:
           working-directory: ${{ steps.config.outputs.working-path }}
           environment: dev
@@ -61,7 +61,7 @@ jobs:
           lint: 'false'
           destroy: 'true'
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-apply@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-apply@v1
         with:
           working-directory: ${{ steps.config.outputs.working-path }}
           plan-file: ${{ steps.plan.outputs.plan-file }}

@@ -26,17 +26,17 @@ jobs:
       - uses: actions/checkout@v7
 
       - id: config
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@v1
         with:
           environment: ${{ inputs.environment }}
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@v1
         with:
           terraform-version: ${{ steps.config.outputs.terraform-version }}
           aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
 
       - id: plan
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@v1
         with:
           working-directory: ${{ steps.config.outputs.working-path }}
           environment: ${{ inputs.environment }}

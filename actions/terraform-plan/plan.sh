@@ -10,10 +10,13 @@ if [[ "$REQUIRE_BACKEND" == "true" && -z "${BACKEND_BUCKET:-}" ]]; then
   echo "::error::bucket de state vazio: defina a variable TF_STATE_BUCKET (vars.TF_STATE_BUCKET) no GitHub Environment '${ENVIRONMENT}'."
   exit 1
 fi
+if [[ -n "${BACKEND_BUCKET:-}" && -z "${BACKEND_KEY:-}" ]]; then
+  echo "::error::backend-key vazio: esperado <repositório>/terraform.tfstate."
+  exit 1
+fi
 
 terraform fmt -check -recursive
 if [[ -n "${BACKEND_BUCKET:-}" ]]; then
-  : "${BACKEND_KEY:?BACKEND_KEY ausente}"
   terraform init -input=false -lock-timeout=5m \
     -backend-config="bucket=${BACKEND_BUCKET}" -backend-config="key=${BACKEND_KEY}"
 else

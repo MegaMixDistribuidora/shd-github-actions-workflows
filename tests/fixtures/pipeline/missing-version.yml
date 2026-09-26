@@ -1,0 +1,4 @@
+infra:
+  working-path: terraform-aws
+environments:
+  dev: {}

@@ -1,0 +1,19 @@
+name: Terraform Apply
+description: Aplica o plano salvo pelo terraform-plan (nunca -auto-approve sobre um plano novo).
+
+inputs:
+  working-directory:
+    description: Diretório do Terraform
+    required: true
+  plan-file:
+    description: Caminho do plano salvo (output plan-file do terraform-plan)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        PLAN_FILE: ${{ inputs.plan-file }}
+      run: terraform apply -input=false -lock-timeout=5m -no-color "$PLAN_FILE"

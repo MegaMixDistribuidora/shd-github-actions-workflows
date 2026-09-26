@@ -1,0 +1,32 @@
+name: Parse Config
+description: Lê o .pipeline.yml do consumidor e publica a configuração do ambiente.
+
+inputs:
+  environment:
+    description: Ambiente (chave em environments do .pipeline.yml)
+    required: true
+  config-file:
+    description: Caminho do arquivo de configuração
+    required: false
+    default: .pipeline.yml
+
+outputs:
+  config:
+    description: JSON plano com chaves pipe_<seção>_<chave>
+    value: ${{ steps.parse.outputs.config }}
+  terraform-version:
+    description: infra.terraform-version
+    value: ${{ steps.parse.outputs.terraform-version }}
+  working-path:
+    description: infra.working-path
+    value: ${{ steps.parse.outputs.working-path }}
+  files-to-replace:
+    description: Arquivos para substituição de tokens, separados por espaço
+    value: ${{ steps.parse.outputs.files-to-replace }}
+
+runs:
+  using: composite
+  steps:
+    - id: parse
+      shell: bash
+      run: bash "${{ github.action_path }}/parse-config.sh" "${{ inputs.config-file }}" "${{ inputs.environment }}"

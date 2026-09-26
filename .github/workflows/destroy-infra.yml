@@ -1,0 +1,79 @@
+# Reutilizável. Chamador: on: issues (types: labeled) com o template de destroy.
+name: Destroy Infra
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  destroy:
+    name: Destroy (dev)
+    if: github.event.label.name == 'destroy-approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: dev
+    concurrency:
+      group: ${{ github.repository }}-dev
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      - id: env
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        with:
+          field: Ambiente
+      - id: confirm
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        with:
+          field: Confirmação
+      - name: Só dev, confirmação com o nome do repositório
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.value }}
+          CONFIRM: ${{ steps.confirm.outputs.value }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          [[ "$ENVIRONMENT" == "dev" ]] || { echo "::error::destroy só é permitido em dev."; exit 1; }
+          [[ "$CONFIRM" == "$REPO" ]] || { echo "::error::a confirmação deve ser exatamente '$REPO'."; exit 1; }
+
+      - uses: actions/checkout@v7
+
+      - id: config
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@main
+        with:
+          environment: dev
+
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
+        with:
+          terraform-version: ${{ steps.config.outputs.terraform-version }}
+          aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
+
+      - id: plan
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@main
+        with:
+          working-directory: ${{ steps.config.outputs.working-path }}
+          environment: dev
+          backend-bucket: ${{ vars.TF_STATE_BUCKET }}
+          backend-key: ${{ github.event.repository.name }}/terraform.tfstate
+          lint: 'false'
+          destroy: 'true'
+
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-apply@main
+        with:
+          working-directory: ${{ steps.config.outputs.working-path }}
+          plan-file: ${{ steps.plan.outputs.plan-file }}
+
+      - if: always()
+        uses: actions/github-script@v9
+        env:
+          STATUS: ${{ job.status }}
+        with:
+          script: |
+            const ok = process.env.STATUS === 'success';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
+              body: `${ok ? '✅ Destroy de dev concluído' : '❌ Destroy falhou'}.\n${run}` });
+            if (ok) await github.rest.issues.update({ ...context.repo, issue_number: context.issue.number, state: 'closed' });

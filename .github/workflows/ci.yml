@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color
+
+      - name: shellcheck
+        run: find . -name '*.sh' -not -path './.git/*' -print0 | xargs -0 -r shellcheck -x
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - run: bash tests/run.sh
+
+  pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./actions/validate-pr
+
+  self-test:
+    name: Self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tests/fixtures/infra-basic
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: config
+        uses: ./actions/parse-config
+        with:
+          environment: dev
+          config-file: tests/fixtures/infra-basic/.pipeline.yml
+
+      - uses: ./actions/setup-terraform-aws
+        with:
+          terraform-version: ${{ steps.config.outputs.terraform-version }}
+          require-role: 'false'
+
+      - name: Versão instalada é a do .pipeline.yml
+        run: terraform version -json | jq -e --arg v "${{ steps.config.outputs.terraform-version }}" '.terraform_version == $v'
+
+      - uses: ./actions/replace-tokens
+        with:
+          files: ${{ steps.config.outputs.files-to-replace }}
+          config: ${{ steps.config.outputs.config }}
+
+      - id: plan
+        uses: ./actions/terraform-plan
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          environment: dev
+          require-backend: 'false'
+
+      - name: Primeiro plano tem mudanças
+        run: test "${{ steps.plan.outputs.has-changes }}" = "true"
+
+      - uses: ./actions/terraform-apply
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          plan-file: ${{ steps.plan.outputs.plan-file }}
+
+      - id: replan
+        uses: ./actions/terraform-plan
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          environment: dev
+          require-backend: 'false'
+          lint: 'false'
+
+      - name: Depois do apply não há mudanças
+        run: test "${{ steps.replan.outputs.has-changes }}" = "false"
+
+      - name: Apply de plano vazio não falha
+        uses: ./actions/terraform-apply
+        with:
+          working-directory: tests/fixtures/infra-basic/terraform-aws
+          plan-file: ${{ steps.replan.outputs.plan-file }}

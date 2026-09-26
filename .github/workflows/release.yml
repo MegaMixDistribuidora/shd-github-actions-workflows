@@ -1,9 +1,7 @@
 # ADR-14: todo commit na main gera tag vX.Y.Z e GitHub Release.
-# A tag aponta para um commit FORA da main em que as referências internas
-# MegaMixDistribuidora/shd-github-actions-workflows/actions/<nome>@... são
-# reescritas para @vX.Y.Z — fixar a tag congela também as actions internas.
-# Como esse commit não é alcançável pela main, a versão é calculada por
-# scripts/next-version.sh a partir da última tag v* (e não pelo semantic-release).
+# As referências internas dos workflows usam a major móvel (@v1): o release cria
+# vX.Y.Z no commit da main e move vX para ele. Nenhum arquivo é alterado — o
+# GITHUB_TOKEN não pode fazer push de commit que mexa em .github/workflows.
 name: Release
 
 on:
@@ -26,7 +24,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -37,7 +35,7 @@ jobs:
           version=$(bash scripts/next-version.sh)
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Tag with pinned internal references
+      - name: Tag e major móvel
         if: steps.version.outputs.version != ''
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -45,13 +43,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout --detach
-          bash scripts/pin-internal-refs.sh "$VERSION" .github/workflows/*.yml
-          if ! git diff --quiet; then
-            git commit -qam "chore(release): v${VERSION}"
-          fi
-          git tag -a "v${VERSION}" -m "v${VERSION}"
+          bash scripts/tag-release.sh "$VERSION"
+          major="v${VERSION%%.*}"
           git push origin "v${VERSION}"
+          git push --force origin "refs/tags/${major}"
 
       - name: GitHub Release
         if: steps.version.outputs.version != ''

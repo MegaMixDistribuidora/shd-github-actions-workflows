@@ -24,12 +24,12 @@ jobs:
           fetch-depth: 0
 
       - id: changed
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/changed-modules@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/changed-modules@v1
         with:
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@v1
         with:
           terraform-version: ${{ inputs.terraform-version }}
           require-role: 'false'

@@ -36,22 +36,22 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - id: config
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-config@v1
         with:
           environment: ${{ inputs.environment }}
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/replace-tokens@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/replace-tokens@v1
         with:
           files: ${{ steps.config.outputs.files-to-replace }}
           config: ${{ steps.config.outputs.config }}
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/setup-terraform-aws@v1
         with:
           terraform-version: ${{ steps.config.outputs.terraform-version }}
           aws-role-arn: ${{ vars.AWS_ROLE_ARN }}
 
       - id: plan
-        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@main
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-plan@v1
         with:
           working-directory: ${{ steps.config.outputs.working-path }}
           environment: ${{ inputs.environment }}
@@ -59,7 +59,7 @@ jobs:
           backend-key: ${{ github.event.repository.name }}/terraform.tfstate
           lint: 'false'
 
-      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-apply@main
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/terraform-apply@v1
         with:
           working-directory: ${{ steps.config.outputs.working-path }}
           plan-file: ${{ steps.plan.outputs.plan-file }}

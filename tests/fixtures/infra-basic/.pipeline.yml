@@ -1,0 +1,6 @@
+infra:
+  terraform-version: "1.14.9"
+  working-path: terraform-aws
+
+environments:
+  dev: {}

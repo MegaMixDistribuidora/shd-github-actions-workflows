@@ -1,0 +1,45 @@
+name: Setup Terraform + AWS
+description: Instala o Terraform (sem wrapper) e, se houver role, assume-a via OIDC.
+
+inputs:
+  terraform-version:
+    description: Versão do Terraform (vem do .pipeline.yml)
+    required: true
+  aws-role-arn:
+    description: Role assumida via OIDC (vars.AWS_ROLE_ARN)
+    required: false
+    default: ''
+  require-role:
+    description: Falha se aws-role-arn vier vazio (true/false). Autoteste e CI de módulos usam false
+    required: false
+    default: 'true'
+  aws-region:
+    description: Região AWS
+    required: false
+    default: sa-east-1
+
+runs:
+  using: composite
+  steps:
+    - name: Role definida no Environment
+      shell: bash
+      env:
+        ROLE: ${{ inputs.aws-role-arn }}
+        REQUIRE_ROLE: ${{ inputs.require-role }}
+      run: |
+        if [[ "$REQUIRE_ROLE" == "true" && -z "$ROLE" ]]; then
+          echo "::error::role vazia: defina a variable AWS_ROLE_ARN (vars.AWS_ROLE_ARN) no GitHub Environment do job."
+          exit 1
+        fi
+
+    - uses: hashicorp/setup-terraform@v4
+      with:
+        terraform_version: ${{ inputs.terraform-version }}
+        terraform_wrapper: false
+
+    # O job chamador precisa de permissions: id-token: write.
+    - if: inputs.aws-role-arn != ''
+      uses: aws-actions/configure-aws-credentials@v6
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}

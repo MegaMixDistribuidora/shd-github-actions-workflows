@@ -1,0 +1,73 @@
+# Reutilizável. Chamador: on: issues (types: labeled) com o template de rollback.
+name: Rollback Infra
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  parse:
+    name: Parse Issue
+    if: github.event.label.name == 'rollback-approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      environment: ${{ steps.env.outputs.value }}
+      tag: ${{ steps.tag.outputs.value }}
+    steps:
+      - id: env
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        with:
+          field: Ambiente
+      - id: tag
+        uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/parse-issue@main
+        with:
+          field: Tag ou Release alvo
+      - name: Ambiente e tag válidos
+        env:
+          ENVIRONMENT: ${{ steps.env.outputs.value }}
+          TAG: ${{ steps.tag.outputs.value }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          [[ "$ENVIRONMENT" =~ ^(dev|prod)$ ]] || { echo "::error::ambiente inválido: $ENVIRONMENT"; exit 1; }
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::tag inválida: $TAG"; exit 1; }
+          gh api "repos/$REPOSITORY/git/ref/tags/$TAG" >/dev/null || { echo "::error::tag $TAG não existe"; exit 1; }
+      # Sem required reviewers no plano Free: rollback em prod só por admin do repositório.
+      - uses: MegaMixDistribuidora/shd-github-actions-workflows/actions/require-admin@main
+        with:
+          environment: ${{ steps.env.outputs.value }}
+
+  rollback:
+    name: Rollback
+    needs: parse
+    uses: MegaMixDistribuidora/shd-github-actions-workflows/.github/workflows/cd-infra-terraform.yml@main
+    with:
+      environment: ${{ needs.parse.outputs.environment }}
+      ref: ${{ needs.parse.outputs.tag }}
+    permissions:
+      contents: read
+      id-token: write
+
+  report:
+    name: Comment on Issue
+    needs: [parse, rollback]
+    if: always() && needs.parse.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          RESULT: ${{ needs.rollback.result }}
+          ENVIRONMENT: ${{ needs.parse.outputs.environment }}
+          TAG: ${{ needs.parse.outputs.tag }}
+        with:
+          script: |
+            const ok = process.env.RESULT === 'success';
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
+              body: `${ok ? '✅ Rollback aplicado' : '❌ Rollback falhou'} em \`${process.env.ENVIRONMENT}\` com a tag \`${process.env.TAG}\`.\n${run}` });

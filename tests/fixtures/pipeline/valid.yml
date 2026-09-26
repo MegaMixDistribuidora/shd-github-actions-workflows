@@ -1,0 +1,10 @@
+infra:
+  terraform-version: "1.14.9"
+  working-path: terraform-aws
+
+environments:
+  dev:
+    note: desenvolvimento
+  prod: {}
+  files-to-replace:
+    - terraform-aws/app.json

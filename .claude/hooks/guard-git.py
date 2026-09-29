@@ -5,8 +5,12 @@ Blocks (exit 2, reason on stderr):
   - git commit while the target repository is on dev or main
     (except the initial commit of an empty repository);
   - git push whose destination is dev or main, a plain push from dev/main,
-    and --all / --mirror;
+    and --all / --mirror (except pushing main's initial commit when the
+    remote has no main branch yet);
   - gh pr merge into main, with --admin, or while any check is not green.
+
+Exception: the megamix-workspace repository (AI context only, no deploy) is
+exempt and works directly on main.
 
 Parses every command segment (&&, ||, ;, |, subshells), follows `cd <dir>`,
 `git -C <dir>` and nested `bash -c "..."`. Fails closed when the PR state
@@ -21,6 +25,7 @@ import sys
 PROTECTED = {"dev", "main"}
 SEPARATORS = {"&&", "||", ";", "|", "&", "(", ")", "\n", ";;", "|&"}
 SHELLS = {"bash", "sh", "zsh"}
+EXEMPT_REPOS = {"megamix-workspace"}
 
 
 def block(reason: str) -> None:
@@ -37,8 +42,22 @@ def current_branch(repo_dir):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def repo_name(slug):
+    return slug.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+
+
+def is_exempt(repo_dir):
+    result = run(["git", "remote", "get-url", "origin"], repo_dir)
+    return result.returncode == 0 and repo_name(result.stdout.strip()) in EXEMPT_REPOS
+
+
 def has_commits(repo_dir):
     return run(["git", "rev-parse", "--verify", "-q", "HEAD"], repo_dir).returncode == 0
+
+
+def remote_has_branch(repo_dir, remote, branch):
+    result = run(["git", "ls-remote", "--exit-code", "--heads", remote, branch], repo_dir)
+    return result.returncode == 0
 
 
 def tokenize(command):
@@ -88,6 +107,8 @@ def check_git(args, cwd):
     if i >= len(args):
         return
     sub, rest = args[i], args[i + 1:]
+    if sub in {"commit", "push"} and is_exempt(repo):
+        return
     if sub == "commit":
         branch = current_branch(repo)
         if branch in PROTECTED and has_commits(repo):
@@ -119,10 +140,13 @@ def check_push(rest, repo):
         if token.startswith("-"):
             continue
         positional.append(token)
+    remote = positional[0] if positional else "origin"
     refspecs = positional[1:]
     if not refspecs:
         branch = current_branch(repo)
         if branch in PROTECTED:
+            if branch == "main" and not remote_has_branch(repo, remote, "main"):
+                return
             block(f"push a partir de '{branch}'. Mudanças entram por PR de uma feature/*.")
         return
     for spec in refspecs:
@@ -131,6 +155,8 @@ def check_push(rest, repo):
         if dest == "HEAD":
             dest = current_branch(repo) or ""
         if dest in PROTECTED:
+            if dest == "main" and not remote_has_branch(repo, remote, "main"):
+                continue
             block(f"push para '{dest}'. Abra um PR (feature/* -> dev ou dev -> main).")
 
 
@@ -158,6 +184,10 @@ def check_gh(args, cwd):
         if token.startswith("-"):
             continue
         selector.append(token)
+    if repo_flag and repo_name(repo_flag[1]) in EXEMPT_REPOS:
+        return
+    if not repo_flag and is_exempt(cwd):
+        return
     target = selector[:1]
     view = run(["gh", "pr", "view", *target, *repo_flag, "--json", "baseRefName,number"], cwd)
     if view.returncode != 0:

@@ -11,4 +11,6 @@
 8. **Nunca contornar a esteira:** sem `--no-verify`, force push, `gh pr merge --admin` ou checks desligados.
 9. Commits e títulos de PR em Conventional Commits, em português (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`).
 
-O hook `.claude/hooks/guard-git.py` bloqueia localmente as violações das regras 2, 5 e 6. Se ele bloquear um comando, não o contorne: crie a feature, abra o PR ou pergunte ao usuário.
+**Exceção: `megamix-workspace`.** O repositório do workspace guarda só os contextos de IA e não tem deploy. Nele se commita e faz push direto na `main`, sem `feature/*`, `dev` nem PR; as regras 8 e 9 continuam valendo, e a regra 7 (tag e release a cada commit) também.
+
+O hook `.claude/hooks/guard-git.py` bloqueia localmente as violações das regras 2, 5 e 6 (exceto no `megamix-workspace`). Se ele bloquear um comando, não o contorne: crie a feature, abra o PR ou pergunte ao usuário.
